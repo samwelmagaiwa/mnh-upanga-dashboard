@@ -12,16 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         if (Schema::hasTable('daily_dashboard_stats')) {
-            Schema::table('daily_dashboard_stats', function (Blueprint $table) {
-                if (!collect(DB::select("SHOW INDEX FROM daily_dashboard_stats"))->pluck('Key_name')->contains('daily_dashboard_stats_stat_date_index')) {
+            $indexes = collect(Schema::getIndexes('daily_dashboard_stats'))->pluck('name');
+            Schema::table('daily_dashboard_stats', function (Blueprint $table) use ($indexes) {
+                if (!$indexes->contains('daily_dashboard_stats_stat_date_index')) {
                     $table->index('stat_date');
                 }
             });
         }
 
         if (Schema::hasTable('clinic_stats')) {
-            Schema::table('clinic_stats', function (Blueprint $table) {
-                $indexes = collect(DB::select("SHOW INDEX FROM clinic_stats"))->pluck('Key_name');
+            $indexes = collect(Schema::getIndexes('clinic_stats'))->pluck('name');
+            Schema::table('clinic_stats', function (Blueprint $table) use ($indexes) {
                 if (!$indexes->contains('clinic_stats_stat_date_index')) {
                     $table->index('stat_date');
                 }
@@ -32,8 +33,8 @@ return new class extends Migration
         }
 
         if (Schema::hasTable('sync_logs')) {
-            Schema::table('sync_logs', function (Blueprint $table) {
-                $indexes = collect(DB::select("SHOW INDEX FROM sync_logs"))->pluck('Key_name');
+            $indexes = collect(Schema::getIndexes('sync_logs'))->pluck('name');
+            Schema::table('sync_logs', function (Blueprint $table) use ($indexes) {
                 if (!$indexes->contains('sync_logs_sync_date_index')) {
                     $table->index('sync_date');
                 }
