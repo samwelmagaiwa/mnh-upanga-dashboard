@@ -428,10 +428,11 @@ class SyncService
         );
 
         $clinicData = Visit::where('visit_date', $date)
-            ->groupBy('clinic_code', 'clinic_name')
+            ->groupBy('clinic_code', 'clinic_name', 'hosp_bu')
             ->select(
-                'clinic_code', 
-                'clinic_name', 
+                'clinic_code',
+                'clinic_name',
+                'hosp_bu',
                 DB::raw('COUNT(*) as total_visits'),
                 DB::raw('SUM(CASE WHEN visit_status = "C" THEN 1 ELSE 0 END) as consulted'),
                 DB::raw('SUM(CASE WHEN (visit_status IS NULL OR visit_status != "C") THEN 1 ELSE 0 END) as pending')
@@ -444,13 +445,14 @@ class SyncService
                     'stat_date' => $date,
                     'clinic_code' => $item->clinic_code,
                     'clinic_name' => $item->clinic_name ?: 'Unknown Clinic',
+                    'hosp_bu' => trim($item->hosp_bu ?? '') ?: null,
                     'total_visits' => (int)$item->total_visits,
                     'consulted' => (int)$item->consulted,
                     'pending' => (int)$item->pending
                 ];
             })->toArray();
 
-            ClinicStat::upsert($clinicBatch, ['stat_date', 'clinic_code'], ['clinic_name', 'total_visits', 'consulted', 'pending']);
+            ClinicStat::upsert($clinicBatch, ['stat_date', 'clinic_code'], ['clinic_name', 'hosp_bu', 'total_visits', 'consulted', 'pending']);
         }
 
         // 3. Pre-aggregate Referral Stats
@@ -639,6 +641,7 @@ class SyncService
                 'nhi_yn' => substr($cleanData['nhiYn'] ?? 'N', 0, 1),
                 'pat_catg_nm' => $patCatgNm,
                 'status' => substr($cleanData['status'] ?? 'A', 0, 1),
+                'hosp_bu' => trim($cleanData['hospBu'] ?? '') ?: null,
                 'is_nhif' => $isNhif,
                 'gender' => isset($cleanData['patGender']) ? substr($cleanData['patGender'], 0, 1) : null,
                 'cons_doctor_name' => $cleanData['consDoctName'] ?? null,

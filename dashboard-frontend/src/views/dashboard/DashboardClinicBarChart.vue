@@ -8,6 +8,14 @@ const dashboard = useDashboardStore()
 const chartRef = ref(null)
 const activeClinicIndex = ref(-1)
 
+const selectedBusinessUnit = computed(() => dashboard.selectedBusinessUnit)
+const availableBusinessUnits = computed(() => dashboard.availableBusinessUnits)
+const isBUFilterLoading = computed(() => dashboard.isBUFilterLoading)
+
+const onBUChange = (e) => {
+  dashboard.filterClinicsByBU(e.target.value || null)
+}
+
 let previewStartTimer = null
 let previewStopTimer = null
 let previewRestartTimer = null
@@ -1132,6 +1140,22 @@ const exportPendingToExcel = async () => {
           <span class="btn-text fw-bold">{{ showAll ? 'Top 10' : 'Full' }}</span>
         </button>
 
+        <!-- ── Business Unit Filter ── -->
+        <div v-if="availableBusinessUnits.length > 0" class="legend-divider"></div>
+        <div v-if="availableBusinessUnits.length > 0" class="bu-filter-wrap">
+          <span class="bu-filter-label">BU:</span>
+          <select
+            class="bu-filter-select"
+            :value="selectedBusinessUnit || ''"
+            @change="onBUChange"
+            :disabled="isBUFilterLoading"
+          >
+            <option value="">All</option>
+            <option v-for="bu in availableBusinessUnits" :key="bu" :value="bu">{{ bu }}</option>
+          </select>
+          <span v-if="isBUFilterLoading" class="bu-spinner"></span>
+        </div>
+
         <!-- ── Export Button ── -->
         <div class="legend-divider"></div>
         <button
@@ -1555,6 +1579,64 @@ const exportPendingToExcel = async () => {
   border-radius: 50%;
   border-top-color: #fff;
   animation: pmSpin 0.7s linear infinite;
+}
+
+/* ─── Business Unit Filter ────────────────────────────────────────────────── */
+.bu-filter-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bu-filter-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.bu-filter-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E") no-repeat right 8px center;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 4px 28px 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+  color: #1e293b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+
+.bu-filter-select:hover {
+  border-color: #003082;
+  background-color: #eff6ff;
+}
+
+.bu-filter-select:focus {
+  outline: none;
+  border-color: #003082;
+  box-shadow: 0 0 0 3px rgba(0, 48, 130, 0.1);
+}
+
+.bu-filter-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bu-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #003082;
+  border-radius: 50%;
+  animation: pmSpin 0.7s linear infinite;
+  flex-shrink: 0;
 }
 </style>
 

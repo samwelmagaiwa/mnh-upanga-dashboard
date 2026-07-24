@@ -359,29 +359,39 @@ class DashboardController extends Controller
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
         $singleDate = $request->query('date');
+        $hospBu = $request->query('hosp_bu'); // optional BU filter
 
         if (!$startDate || !$endDate) {
             $startDate = $singleDate ?? date('Y-m-d');
             $endDate = $startDate;
         }
 
-        $cacheKey = $this->cacheKey('clinic_breakdown', $startDate, $endDate);
+        $buSuffix = $hospBu ? '_' . md5($hospBu) : '';
+        $cacheKey = $this->cacheKey('clinic_breakdown', $startDate, $endDate) . $buSuffix;
         $isToday = ($startDate <= date('Y-m-d') && $endDate >= date('Y-m-d'));
         $ttl = $isToday ? 60 : 600;
 
-        return $this->rememberUnlessFresh($request, $cacheKey, $ttl, function() use ($startDate, $endDate) {
+        return $this->rememberUnlessFresh($request, $cacheKey, $ttl, function() use ($startDate, $endDate, $hospBu) {
             $comparison = $this->getComparisonPeriod(Carbon::parse($startDate), Carbon::parse($endDate));
             $compLabel = $comparison['label'];
 
-            $current = ClinicStat::where('stat_date', '>=', $startDate)
-                ->where('stat_date', '<=', $endDate)
+            $currentQuery = ClinicStat::where('stat_date', '>=', $startDate)
+                ->where('stat_date', '<=', $endDate);
+            if ($hospBu) {
+                $currentQuery->where('hosp_bu', trim($hospBu));
+            }
+            $current = $currentQuery
                 ->selectRaw('clinic_name, SUM(total_visits) as total_visits, SUM(consulted) as consulted, SUM(pending) as pending')
                 ->groupBy('clinic_name')
                 ->orderByDesc('total_visits')
                 ->get();
 
-            $prev = ClinicStat::where('stat_date', '>=', $comparison['start']->toDateString())
-                ->where('stat_date', '<=', $comparison['end']->toDateString())
+            $prevQuery = ClinicStat::where('stat_date', '>=', $comparison['start']->toDateString())
+                ->where('stat_date', '<=', $comparison['end']->toDateString());
+            if ($hospBu) {
+                $prevQuery->where('hosp_bu', trim($hospBu));
+            }
+            $prev = $prevQuery
                 ->selectRaw('clinic_name, SUM(total_visits) as total_visits, SUM(consulted) as consulted, SUM(pending) as pending')
                 ->groupBy('clinic_name')
                 ->get();
@@ -447,6 +457,28 @@ class DashboardController extends Controller
 
             return $breakdown;
         });
+    }
+
+    /**
+     * Get distinct business units available in the given date range.
+     */
+    public function getBusinessUnits(Request $request)
+    {
+        $startDate = $request->query('start_date', date('Y-m-d'));
+        $endDate   = $request->query('end_date',   $startDate);
+
+        $units = ClinicStat::where('stat_date', '>=', $startDate)
+            ->where('stat_date', '<=', $endDate)
+            ->whereNotNull('hosp_bu')
+            ->where('hosp_bu', '!=', '')
+            ->distinct()
+            ->orderBy('hosp_bu')
+            ->pluck('hosp_bu')
+            ->map(fn($bu) => trim($bu))
+            ->unique()
+            ->values();
+
+        return response()->json(['data' => $units]);
     }
 
     /**

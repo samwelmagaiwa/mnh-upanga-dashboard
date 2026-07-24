@@ -25,6 +25,7 @@ Route::prefix('dashboard')->controller(DashboardController::class)->group(functi
     Route::get('/stats', 'getStats');
     Route::get('/snapshot', 'getSnapshot');
     Route::get('/clinics', 'getClinicBreakdown');
+    Route::get('/business-units', 'getBusinessUnits');
     Route::get('/detailed-clinics', 'getDetailedClinicVisits');
     Route::get('/gaps', 'getGaps');
     Route::get('/pie-stats', 'getPieStats');

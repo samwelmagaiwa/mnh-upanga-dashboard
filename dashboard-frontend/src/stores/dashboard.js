@@ -40,6 +40,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const detailedClinics = ref(null) // null = loading, [] = no data
   const topDiseases = ref(null) // null = loading, [] = no data
   const selectedClinic = ref('All Clinics')
+  const selectedBusinessUnit = ref(null) // null = All BUs
+  const availableBusinessUnits = ref([]) // fetched from API
+  const isBUFilterLoading = ref(false)
   const diagnosisMetadata = ref({}) // code => {abbreviation, description}
   const isLoading = ref(false)
   const isTrendsLoading = ref(false)
@@ -478,6 +481,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
         compStats.value = null
         referralStats.value = null
         serviceTrendData.value = null
+        selectedBusinessUnit.value = null
+        availableBusinessUnits.value = []
         stopOfflineCountdown()
         return
       }
@@ -565,6 +570,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         if (!isBackgroundSyncRefresh) {
           fetchGenderRadarStats(silent)
           fetchDetailedClinics(silent)
+          fetchBusinessUnits()
         } else if ((detailedClinics.value?.length || 0) === 0 || (data.stats.stats?.total_detailed || 0) > 0) {
           fetchDetailedClinics(true, { background: true })
         }
@@ -1199,6 +1205,34 @@ export const useDashboardStore = defineStore('dashboard', () => {
     selectedRange.value = [new Date(), new Date()]
   }
 
+  const fetchBusinessUnits = async () => {
+    try {
+      const { start_date, end_date } = calculateDateRange()
+      const { data } = await api.get('/dashboard/business-units', {
+        params: { start_date, end_date, _t: Date.now() },
+      })
+      availableBusinessUnits.value = data.data || []
+    } catch {
+      availableBusinessUnits.value = []
+    }
+  }
+
+  const filterClinicsByBU = async (bu) => {
+    selectedBusinessUnit.value = bu
+    isBUFilterLoading.value = true
+    try {
+      const { start_date, end_date } = calculateDateRange()
+      const params = { start_date, end_date, fresh: 1, _t: Date.now() }
+      if (bu) params.hosp_bu = bu
+      const { data } = await api.get('/dashboard/clinics', { params })
+      realClinics.value = data
+    } catch {
+      // keep existing realClinics on error
+    } finally {
+      isBUFilterLoading.value = false
+    }
+  }
+
   return {
     selectedPeriod,
     selectedDay,
@@ -1269,5 +1303,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     isUsingCachedData,
     isOfflineUIReported,
     calculateDateRange,
+    selectedBusinessUnit,
+    availableBusinessUnits,
+    isBUFilterLoading,
+    fetchBusinessUnits,
+    filterClinicsByBU,
   }
 })
