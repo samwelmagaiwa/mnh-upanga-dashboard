@@ -50,6 +50,14 @@ const chartOptions = {
 const pieChartOptions = {
   ...chartOptions,
   cutout: 0,
+  layout: {
+    padding: {
+      top: 20,
+      bottom: 20,
+      left: 20,
+      right: 20,
+    },
+  },
 }
 
 const genericPieLabelsPlugin = {
@@ -71,7 +79,12 @@ const genericPieLabelsPlugin = {
       if (!value || value === 0) return
 
       const total = chart.data.datasets[0].data.reduce((a, b) => a + b, 0)
-      const percentage = ((value / total) * 100).toFixed(1) + '%'
+      const pct = (value / total) * 100
+
+      // Skip labels for slices too small to display cleanly inside — tooltip covers them
+      if (pct < 5) return
+
+      const percentage = pct.toFixed(1) + '%'
 
       const model = element
       const midRadius = model.outerRadius * 0.65 + model.innerRadius * 0.35

@@ -424,6 +424,7 @@ const categoryPieLabelsPlugin = {
       const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2
       const angleSpan = ((element.endAngle - element.startAngle) * 180) / Math.PI
       const sliceColor = chart.data.datasets[0].backgroundColor[index]
+      const label = chart.data.labels[index] || ''
 
       if (angleSpan >= 15) {
         const midRadius = element.outerRadius * 0.6 + element.innerRadius * 0.1
@@ -446,7 +447,8 @@ const categoryPieLabelsPlugin = {
         const y1 = Math.sin(midAngle) * (r * 0.99) + cy
         const x2 = Math.cos(midAngle) * (r * 1.03) + cx
         const y2 = Math.sin(midAngle) * (r * 1.03) + cy
-        const isRight = x2 > cx
+        // FOREIGNER slice always ends just before 12 o'clock — force label right
+        const isRight = label === 'FOREIGNER' ? true : x2 > cx
         const x3 = x2 + (isRight ? 8 : -8)
         const y3 = y2
         ctx.shadowBlur = 0
@@ -468,6 +470,138 @@ const categoryPieLabelsPlugin = {
     ctx.restore()
   },
 }
+
+// ── Emergency Department Breakdown ───────────────────────────────────────────
+
+const EMERGENCY_CLINIC_COLORS = {
+  'EMERGENCY MEDICINE': '#dc3545',
+  'EMERGENCY - VIP':   '#ff6b7a',
+  'MATERNITY EMERGENCY': '#a93226',
+}
+
+const emergencyClinicsData = computed(() =>
+  [...(dashboard.realClinics || [])]
+    .filter((c) => (c.clinic_name || '').toUpperCase().includes('EMERGENCY'))
+    .sort((a, b) => b.total_visits - a.total_visits),
+)
+
+const emergencyChartData = computed(() => {
+  const clinics = emergencyClinicsData.value
+  const colors = clinics.map((c) => EMERGENCY_CLINIC_COLORS[c.clinic_name] || '#dc3545')
+  const values = clinics.map((c) => c.total_visits || 0)
+  return {
+    labels: clinics.map((c) => c.clinic_name),
+    datasets: [
+      {
+        type: 'bar',
+        label: 'Emergency Visits',
+        backgroundColor: colors,
+        borderColor: colors,
+        borderWidth: 0,
+        data: values,
+        order: 2,
+        barPercentage: 0.55,
+        categoryPercentage: 0.65,
+        borderRadius: 8,
+        borderSkipped: false,
+      },
+      {
+        type: 'line',
+        label: 'Trend',
+        borderColor: '#7b0d1e',
+        backgroundColor: 'rgba(123,13,30,0.08)',
+        borderWidth: 2.5,
+        fill: true,
+        tension: 0.45,
+        data: values,
+        order: 1,
+        pointBackgroundColor: '#7b0d1e',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2.5,
+        pointRadius: 8,
+        pointHoverRadius: 11,
+      },
+    ],
+  }
+})
+
+const emergencyChartOptions = computed(() => {
+  const values = emergencyClinicsData.value.map((c) => c.total_visits || 0)
+  const maxVal = Math.max(...values, 10)
+  const yMax = Math.ceil((maxVal * 1.6) / 10) * 10
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: { padding: { top: 44, bottom: 8, left: 16, right: 16 } },
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: {
+          usePointStyle: true,
+          padding: 18,
+          font: { size: 13, weight: '600', family: "'Outfit', sans-serif" },
+        },
+      },
+      tooltip: {
+        backgroundColor: 'rgba(120,0,0,0.85)',
+        padding: 12,
+        titleFont: { size: 13, weight: 'bold' },
+        bodyFont: { size: 13 },
+        callbacks: {
+          label: (ctx) => ` ${ctx.dataset.label}: ${(ctx.raw || 0).toLocaleString()} patients`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { font: { size: 13, weight: '700', family: "'Outfit', sans-serif" }, color: '#333', maxRotation: 0 },
+      },
+      y: {
+        beginAtZero: true,
+        max: yMax,
+        title: {
+          display: true,
+          text: 'Patients',
+          font: { size: 12, weight: 'bold', family: "'Outfit', sans-serif" },
+          color: '#555',
+        },
+        grid: { color: 'rgba(220,53,69,0.08)', borderDash: [3, 3] },
+        ticks: { font: { size: 11, family: "'Outfit', sans-serif" }, color: '#666' },
+      },
+    },
+  }
+})
+
+const emergencyBarLabelsPlugin = {
+  id: 'emergencyBarLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart
+    const barMeta = chart.getDatasetMeta(0)
+    if (!barMeta || barMeta.type !== 'bar') return
+
+    barMeta.data.forEach((bar, index) => {
+      const value = chart.data.datasets[0].data[index]
+      if (!value) return
+
+      const { x, y } = bar.tooltipPosition()
+      const barColor = chart.data.datasets[0].backgroundColor[index]
+
+      ctx.save()
+      ctx.font = "bold 28px 'Outfit', Arial, sans-serif"
+      ctx.fillStyle = barColor
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'bottom'
+      ctx.shadowColor = 'rgba(255,255,255,0.95)'
+      ctx.shadowBlur = 6
+      ctx.fillText(value.toLocaleString(), x, y - 8)
+      ctx.restore()
+    })
+  },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const formatDate = (dateStr) => {
   if (!dateStr) return 'Date is empty'
@@ -586,12 +720,13 @@ const formatDate = (dateStr) => {
         </div>
       </div>
 
-      <!-- Patient Category Analytics - Two Cards Side by Side -->
+      <!-- Patient Category Analytics + Emergency — Three Cards on the Same Row -->
       <CRow class="mb-4">
-        <CCol :lg="6">
+        <!-- Patient Category Bar Chart -->
+        <CCol :lg="4">
           <div class="card h-100 border-0 shadow-sm">
             <div class="card-header bg-white border-0 p-3">
-              <h5 class="mb-0 fw-bold text-primary" style="font-size: 20px">
+              <h5 class="mb-0 fw-bold text-primary" style="font-size: 18px">
                 Patient Category Chart
               </h5>
             </div>
@@ -609,13 +744,62 @@ const formatDate = (dateStr) => {
           </div>
         </CCol>
 
-        <CCol :lg="6">
+        <!-- Emergency Department Breakdown -->
+        <CCol :lg="4">
+          <div class="card h-100 border-0 emergency-breakdown-card">
+            <div class="card-header emergency-breakdown-header border-0 py-2 px-3 d-flex align-items-center justify-content-between gap-2">
+              <div class="d-flex align-items-center gap-2">
+                <div class="emergency-icon-box-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#dc3545" viewBox="0 0 16 16">
+                    <path d="M8 1a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 1z"/>
+                    <path d="M3.5 0h9A3.5 3.5 0 0 1 16 3.5v9a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 0 12.5v-9A3.5 3.5 0 0 1 3.5 0zm0 1A2.5 2.5 0 0 0 1 3.5v9A2.5 2.5 0 0 0 3.5 15h9a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 12.5 1h-9z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h5 class="mb-0 fw-bold" style="color: #dc3545; font-size: 18px">Emergency Breakdown</h5>
+                  <p class="mb-0 text-muted" style="font-size: 11px; line-height: 1.2">By emergency clinic type</p>
+                </div>
+              </div>
+              <div class="emergency-total-badge-sm">
+                <div class="emergency-total-value-sm">{{ (dashboard.realStats?.emergency_visits || 0).toLocaleString() }}</div>
+                <div class="emergency-total-label-sm">TOTAL</div>
+              </div>
+            </div>
+
+            <div class="card-body p-0">
+              <div style="height: 340px; padding: 0 8px">
+                <CChart
+                  type="bar"
+                  :data="emergencyChartData"
+                  :options="emergencyChartOptions"
+                  :plugins="[emergencyBarLabelsPlugin]"
+                  style="height: 100%"
+                />
+              </div>
+              <div class="d-flex flex-wrap justify-content-center gap-2 px-3 pb-3">
+                <div
+                  v-for="clinic in emergencyClinicsData"
+                  :key="clinic.clinic_name"
+                  class="emergency-clinic-pill-sm"
+                  :style="{ borderColor: EMERGENCY_CLINIC_COLORS[clinic.clinic_name] || '#dc3545', background: (EMERGENCY_CLINIC_COLORS[clinic.clinic_name] || '#dc3545') + '10' }"
+                >
+                  <span class="emergency-pill-dot" :style="{ background: EMERGENCY_CLINIC_COLORS[clinic.clinic_name] || '#dc3545' }"></span>
+                  <span class="emergency-pill-name-sm" :style="{ color: EMERGENCY_CLINIC_COLORS[clinic.clinic_name] || '#dc3545' }">{{ clinic.clinic_name }}</span>
+                  <span class="emergency-pill-count-sm" :style="{ color: EMERGENCY_CLINIC_COLORS[clinic.clinic_name] || '#dc3545' }">{{ (clinic.total_visits || 0).toLocaleString() }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CCol>
+
+        <!-- Patient Category Pie Chart -->
+        <CCol :lg="4">
           <div class="card h-100 border-0 shadow-sm">
-            <div class="card-header bg-white border-0 py-3">
-              <h5 class="mb-0 fw-bold text-primary" style="font-size: 20px">
+            <div class="card-header bg-white border-0 py-2 px-3">
+              <h5 class="mb-0 fw-bold text-primary" style="font-size: 18px">
                 Patient Category Distribution
               </h5>
-              <div class="d-flex flex-wrap justify-content-start mt-2 gap-2">
+              <div class="d-flex flex-wrap justify-content-start mt-1 gap-1">
                 <span
                   v-for="(item, index) in patientCategories.filter((c) => c.title !== 'Total')"
                   :key="index"
@@ -624,9 +808,7 @@ const formatDate = (dateStr) => {
                   :style="{
                     border: `2px solid ${isCategoryHidden(item.title) ? '#ccc' : item.color}`,
                     color: isCategoryHidden(item.title) ? '#999' : item.color,
-                    backgroundColor: isCategoryHidden(item.title)
-                      ? 'transparent'
-                      : `${item.color}15`,
+                    backgroundColor: isCategoryHidden(item.title) ? 'transparent' : `${item.color}15`,
                   }"
                   @click="togglePieCategory(item.title)"
                   :title="isCategoryHidden(item.title) ? 'Click to show' : 'Click to hide'"
@@ -749,6 +931,144 @@ const formatDate = (dateStr) => {
 
 .chart-container {
   padding: 15px;
+}
+
+/* ── Emergency Breakdown Chart ─────────────────────── */
+.emergency-breakdown-card {
+  border-left: 5px solid #dc3545 !important;
+  box-shadow: 0 4px 20px rgba(220, 53, 69, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.emergency-breakdown-header {
+  background: linear-gradient(135deg, #fff 0%, #fff5f5 100%);
+  border-bottom: 1px solid rgba(220, 53, 69, 0.12) !important;
+}
+
+.emergency-icon-box {
+  width: 52px;
+  height: 52px;
+  background: rgba(220, 53, 69, 0.1);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(220, 53, 69, 0.2);
+}
+
+.emergency-total-badge {
+  background: rgba(220, 53, 69, 0.07);
+  border: 2px solid rgba(220, 53, 69, 0.3);
+  border-radius: 14px;
+  padding: 10px 24px;
+  text-align: center;
+  min-width: 150px;
+}
+
+.emergency-total-value {
+  font-size: 32px;
+  font-weight: 900;
+  color: #dc3545;
+  line-height: 1;
+  font-family: 'Outfit', sans-serif;
+}
+
+.emergency-total-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #888;
+  letter-spacing: 0.8px;
+  margin-top: 3px;
+}
+
+.emergency-clinic-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 24px;
+  border: 2px solid;
+  font-family: 'Outfit', sans-serif;
+}
+
+.emergency-pill-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.emergency-pill-name {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.emergency-pill-count {
+  font-size: 14px;
+  font-weight: 900;
+  margin-left: 2px;
+}
+
+/* ── Compact emergency card (col-4) ─────────────────── */
+.emergency-icon-box-sm {
+  width: 38px;
+  height: 38px;
+  background: rgba(220, 53, 69, 0.1);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(220, 53, 69, 0.2);
+}
+
+.emergency-total-badge-sm {
+  background: rgba(220, 53, 69, 0.07);
+  border: 2px solid rgba(220, 53, 69, 0.3);
+  border-radius: 10px;
+  padding: 5px 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.emergency-total-value-sm {
+  font-size: 22px;
+  font-weight: 900;
+  color: #dc3545;
+  line-height: 1;
+  font-family: 'Outfit', sans-serif;
+}
+
+.emergency-total-label-sm {
+  font-size: 9px;
+  font-weight: 700;
+  color: #888;
+  letter-spacing: 0.8px;
+}
+
+.emergency-clinic-pill-sm {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1.5px solid;
+  font-family: 'Outfit', sans-serif;
+}
+
+.emergency-pill-name-sm {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.emergency-pill-count-sm {
+  font-size: 12px;
+  font-weight: 900;
+  margin-left: 1px;
 }
 
 @media (max-width: 991.98px) {

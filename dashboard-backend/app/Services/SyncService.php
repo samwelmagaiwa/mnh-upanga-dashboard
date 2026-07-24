@@ -371,7 +371,7 @@ class SyncService
                 SUM(CASE WHEN pat_catg_nm LIKE "%IPPM%CREDIT%" THEN 1 ELSE 0 END) as ippm_credit,
                 SUM(CASE WHEN pat_catg_nm LIKE "%COST%SHARING%" THEN 1 ELSE 0 END) as cost_sharing,
                 SUM(CASE WHEN pat_catg_nm LIKE "%NSSF%" THEN 1 ELSE 0 END) as nssf,
-                SUM(CASE WHEN dept_code = "150" THEN 1 ELSE 0 END) as emergency,
+                SUM(CASE WHEN clinic_name LIKE "%EMERGENCY%" THEN 1 ELSE 0 END) as emergency,
                 SUM(CASE WHEN gender = "M" THEN 1 ELSE 0 END) as male,
                 SUM(CASE WHEN gender = "F" THEN 1 ELSE 0 END) as female,
                 SUM(CASE WHEN gender = "N" THEN 1 ELSE 0 END) as no_gender,
@@ -465,11 +465,44 @@ class SyncService
             ->get();
 
         if ($referralData->isNotEmpty()) {
-            $referralBatch = $referralData->map(function ($item) use ($date) {
+            // Upanga API sends numeric placeholder (e.g. "01") instead of real names.
+            // Map known codes; fall back to formatted code for unknowns.
+            $hospitalNames = [
+                '000037' => 'SELF REFERRAL',
+                '000035' => 'OTHERS',
+                '000002' => 'AMANA HOSPITAL',
+                '000023' => 'MWANANYAMALA MUNICIPAL HOSPITAL',
+                '000031' => 'TEMEKE HOSPITAL',
+                '000038' => 'MNAZI MMOJA HOSPITAL - DAR',
+                '000045' => 'MUHIMBILI ORTHOPEDIC INSTITUTE',
+                '000020' => 'MOROGORO REGIONAL HOSPITAL',
+                '000041' => 'OCEAN ROAD HOSPITAL - DAR',
+                '000033' => 'TUMBI SPECIAL HOSPITAL',
+                '000004' => 'BAGAMOYO DISTRICT HOSPITAL',
+                '000040' => 'MNAZI MMOJA HOSPITAL - ZANZIBAR',
+                '000024' => 'SHINYANGA REGIONAL HOSPITAL',
+                '000003' => 'MANYARA REGIONAL HOSPITAL',
+                '000010' => 'KCMC REGIONAL HOSPITAL',
+                '000005' => 'BOMBO REGION HOSPITAL',
+                '000013' => 'LUGALO HOSPITAL',
+                '000001' => 'THE AGA KHAN HOSPITAL',
+                '000009' => 'IRINGA REGIONAL HOSPITAL',
+                '000047' => 'KILWA ROAD POLICE HOSPITAL',
+                '000017' => 'MBEYA REFERRAL HOSPITAL',
+                '000026' => 'SINGIDA REGIONAL HOSPITAL',
+                '000042' => 'CCBRT HOSPITAL - DAR',
+                '000008' => 'DODOMA REGIONAL HOSPITAL',
+                '000011' => 'KISARAWE HOSPITAL',
+                '000007' => 'BUKOBA REGIONAL HOSPITAL',
+                '000039' => 'MUHEZA DISTRICT HOSPITAL',
+                '000012' => 'LIGULA HOSPITAL',
+            ];
+
+            $referralBatch = $referralData->map(function ($item) use ($date, $hospitalNames) {
                 $name = $item->name;
-                // Explicit fix for Self Referral code 000037 which often has missing name
-                if ($item->code === '000037' && (empty($name) || stripos($name, 'Facility') !== false)) {
-                    $name = 'SELF REFERRAL';
+                // Replace numeric/empty/placeholder names with mapped or formatted fallback
+                if (empty($name) || is_numeric(trim($name)) || stripos($name, 'Facility') !== false) {
+                    $name = $hospitalNames[$item->code] ?? ('REF. HOSPITAL (' . $item->code . ')');
                 }
                 return [
                     'stat_date' => $date,

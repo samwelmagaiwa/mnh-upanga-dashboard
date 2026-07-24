@@ -260,6 +260,33 @@ const metricDetails = computed(() => [
 
 const keyReferralMap = {
   '000037': 'SELF REFERRAL',
+  '000035': 'OTHERS',
+  '000002': 'AMANA HOSPITAL',
+  '000023': 'MWANANYAMALA MUNICIPAL HOSPITAL',
+  '000031': 'TEMEKE HOSPITAL',
+  '000038': 'MNAZI MMOJA HOSPITAL - DAR',
+  '000045': 'MUHIMBILI ORTHOPEDIC INSTITUTE',
+  '000020': 'MOROGORO REGIONAL HOSPITAL',
+  '000041': 'OCEAN ROAD HOSPITAL - DAR',
+  '000033': 'TUMBI SPECIAL HOSPITAL',
+  '000004': 'BAGAMOYO DISTRICT HOSPITAL',
+  '000040': 'MNAZI MMOJA HOSPITAL - ZANZIBAR',
+  '000024': 'SHINYANGA REGIONAL HOSPITAL',
+  '000003': 'MANYARA REGIONAL HOSPITAL',
+  '000010': 'KCMC REGIONAL HOSPITAL',
+  '000005': 'BOMBO REGION HOSPITAL',
+  '000013': 'LUGALO HOSPITAL',
+  '000001': 'THE AGA KHAN HOSPITAL',
+  '000009': 'IRINGA REGIONAL HOSPITAL',
+  '000047': 'KILWA ROAD POLICE HOSPITAL',
+  '000017': 'MBEYA REFERRAL HOSPITAL',
+  '000026': 'SINGIDA REGIONAL HOSPITAL',
+  '000042': 'CCBRT HOSPITAL - DAR',
+  '000008': 'DODOMA REGIONAL HOSPITAL',
+  '000011': 'KISARAWE HOSPITAL',
+  '000007': 'BUKOBA REGIONAL HOSPITAL',
+  '000039': 'MUHEZA DISTRICT HOSPITAL',
+  '000012': 'LIGULA HOSPITAL',
 }
 
 const referralLoading = computed(() => !dashboard.isInitialized || dashboard.referralStats === null)
@@ -269,8 +296,8 @@ const referralData = computed(() => {
   if (!stats || !Array.isArray(stats)) return []
   return stats.map((item) => {
     let name = item.name
-    if ((!name || name.toLowerCase().includes('facility')) && keyReferralMap[item.code]) {
-      name = keyReferralMap[item.code]
+    if (!name || /^\d+$/.test(name.trim()) || name.toLowerCase().includes('facility')) {
+      name = keyReferralMap[item.code] || `REF. HOSPITAL (${item.code})`
     }
     return { ...item, name }
   })
