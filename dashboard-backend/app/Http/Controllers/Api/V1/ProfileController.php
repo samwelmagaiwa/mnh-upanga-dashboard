@@ -6,12 +6,30 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use OpenApi\Attributes as OA;
 
+#[OA\Tag(name: 'Profile', description: 'Authenticated user profile management')]
 class ProfileController extends Controller
 {
-    /**
-     * Get the authenticated user's profile.
-     */
+    #[OA\Get(
+        path: '/profile',
+        summary: 'Get the authenticated user\'s profile',
+        security: [['sanctum' => []]],
+        tags: ['Profile'],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'User profile',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'status', type: 'string', example: 'success'),
+                    new OA\Property(property: 'data', properties: [
+                        new OA\Property(property: 'user', ref: '#/components/schemas/User'),
+                    ], type: 'object'),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
+        ]
+    )]
     public function show(Request $request)
     {
         return response()->json([
@@ -22,9 +40,40 @@ class ProfileController extends Controller
         ]);
     }
 
-    /**
-     * Update the authenticated user's profile.
-     */
+    #[OA\Put(
+        path: '/profile',
+        summary: 'Update the authenticated user\'s profile',
+        security: [['sanctum' => []]],
+        tags: ['Profile'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\MediaType(
+                mediaType: 'multipart/form-data',
+                schema: new OA\Schema(properties: [
+                    new OA\Property(property: 'name', type: 'string', example: 'Dr. Samwel'),
+                    new OA\Property(property: 'email', type: 'string', format: 'email', example: 'admin@hospital.or.tz'),
+                    new OA\Property(property: 'password', type: 'string', format: 'password', description: 'Leave blank to keep current password'),
+                    new OA\Property(property: 'password_confirmation', type: 'string', format: 'password'),
+                    new OA\Property(property: 'avatar', type: 'string', format: 'binary', description: 'JPEG/PNG image, max 2 MB'),
+                ])
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Profile updated',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'status', type: 'string', example: 'success'),
+                    new OA\Property(property: 'message', type: 'string', example: 'Profile updated successfully'),
+                    new OA\Property(property: 'data', properties: [
+                        new OA\Property(property: 'user', ref: '#/components/schemas/User'),
+                    ], type: 'object'),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
+            new OA\Response(response: 422, description: 'Validation error'),
+        ]
+    )]
     public function update(Request $request)
     {
         $user = $request->user();

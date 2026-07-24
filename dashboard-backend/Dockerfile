@@ -1,70 +1,60 @@
+# ── Stage 1: PHP dependency builder ─────────────────────────────────────────
+# Runs composer install in isolation so the runtime image never needs composer,
+# git, or any other build-only tool.
+FROM composer:2.8 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-interaction \
+    --no-scripts \
+    --no-dev \
+    --prefer-dist \
+    --optimize-autoloader \
+    --ignore-platform-reqs
+
+# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 FROM php:8.2-fpm-alpine
 
-# 1. Install dependencies using APK (Alpine's package manager)
-# Alpine is often much better at bypassing network issues than Debian.
+# Runtime system dependencies only (no git, no curl build tools, no zip binary)
 RUN apk add --no-cache \
     nginx \
+    supervisor \
+    curl \
     libpng-dev \
     oniguruma-dev \
     libxml2-dev \
-    zip \
-    unzip \
-    git \
-    curl \
     libzip-dev \
     icu-dev \
-    mysql-client
+    mysql-client \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip intl \
+    && mkdir -p /run/nginx
 
-# 2. Install PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip intl
+# Nginx config (extracted from heredoc — easier to lint and diff)
+COPY docker/nginx.conf /etc/nginx/http.d/default.conf
 
-# 3. Setup Nginx (to replace Apache on port 80)
-# We create a simple config to serve Laravel
-RUN mkdir -p /run/nginx
-COPY <<EOF /etc/nginx/http.d/default.conf
-server {
-    listen 80;
-    root /var/www/html/public;
-    index index.php index.html;
+# Supervisord manages both nginx and php-fpm so the container restarts either
+# process automatically if one crashes, rather than leaving a 502 loop.
+COPY docker/supervisord.conf /etc/supervisord.conf
 
-    location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
-    }
-
-    location ~ \.php$ {
-        include fastcgi_params;
-        fastcgi_pass 127.0.0.1:9000;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-    }
-}
-EOF
-
-# 4. Setup Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# 5. Copy Code and Install
 WORKDIR /var/www/html
-COPY . .
-RUN composer install --no-interaction --optimize-autoloader --no-dev
 
-# 6. Permissions
+# Vendor from build stage (no composer or internet access needed at runtime)
+COPY --from=vendor /app/vendor ./vendor
+
+# Application source (.dockerignore excludes vendor, node_modules, tests, etc.)
+COPY . .
+
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# 7. Use a startup script to run BOTH Nginx and PHP-FPM
-COPY <<EOF /usr/local/bin/start.sh
-#!/bin/sh
-php-fpm -D
-nginx -g "daemon off;"
-EOF
-RUN chmod +x /usr/local/bin/start.sh
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 80
 
-# Reuse your existing entrypoint logic (migrations/cache)
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# Lightweight liveness probe — check-updates never caches and touches the DB
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -sf http://localhost/api/v1/dashboard/check-updates > /dev/null || exit 1
 
-# Wrap entrypoint
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["/usr/local/bin/start.sh"]
+# Workers override CMD via docker-compose `command:` — this default is web only.
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]

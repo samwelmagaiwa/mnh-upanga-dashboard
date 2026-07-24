@@ -1,0 +1,95 @@
+# docker-compose.local.yml — Local development overlay
+# Adds MariaDB + Redis, wires healthcheck dependencies, and exposes ports
+# directly so you can reach the app without a reverse proxy.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml \
+#     --env-file compose.local.env up -d --build
+#
+# Or just: make local-up  (see Makefile)
+
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: secret
+      MARIADB_DATABASE: dashboard
+      MARIADB_USER: dashboard
+      MARIADB_PASSWORD: secret
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - dashboard_network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - dashboard_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── Backend: wait for DB + Redis, run migrations on first boot ──────────────
+  dashboard_backend:
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      RUN_MIGRATIONS: "true"
+    ports:
+      - "127.0.0.1:8000:80"
+
+  dashboard_worker_1:
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  dashboard_worker_2:
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  dashboard_worker_3:
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  dashboard_scheduler:
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  dashboard_watcher:
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Frontend reachable at http://localhost:3000
+  dashboard_frontend:
+    ports:
+      - "127.0.0.1:3000:80"
+
+volumes:
+  db_data:

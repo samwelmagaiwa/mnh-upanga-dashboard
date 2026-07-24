@@ -12,3 +12,13 @@ bootstrap/cache/*.php
 Dockerfile
 docker-compose.yml
 deploy.sh
+# Test suite — not needed at runtime
+tests/
+phpunit.xml
+.phpunit.cache
+# One-off scripts that were committed temporarily
+resync_june.php
+test_range_stats.php
+test_range_clinics.php
+# Docs
+README.md

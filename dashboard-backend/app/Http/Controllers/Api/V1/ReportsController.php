@@ -7,13 +7,64 @@ use App\Models\Visit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use OpenApi\Attributes as OA;
 
+#[OA\Tag(name: 'Reports', description: 'Clinical reports: pending visits, aging, and ICD-10 diagnosis detail')]
 class ReportsController extends Controller
 {
-    /**
-     * Get pending visits statistics using 'visits' table directly.
-     * Pending = visit_status != 'C' (Not Consulted)
-     */
+    #[OA\Get(
+        path: '/dashboard/reports/pending',
+        summary: 'Pending visits report — by clinic, aging, and full list with ICD-10 metadata',
+        description: 'Returns pending consultations (visit_status != C) grouped by clinic, an aging breakdown by date, and a full list of up to 200 visits enriched with ICD-10 descriptions. Cached for 60s for today, 1 hour for historical ranges.',
+        tags: ['Reports'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17'),
+                description: 'Start date (defaults to today)'
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17'),
+                description: 'End date (defaults to today)'
+            ),
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Pending visits report',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'status', type: 'string', example: 'success'),
+                    new OA\Property(property: 'data', type: 'object', properties: [
+                        new OA\Property(property: 'by_clinic', type: 'array', items: new OA\Items(properties: [
+                            new OA\Property(property: 'clinic_name', type: 'string', example: 'General OPD'),
+                            new OA\Property(property: 'count', type: 'integer', example: 42),
+                        ])),
+                        new OA\Property(property: 'aging', type: 'array', items: new OA\Items(properties: [
+                            new OA\Property(property: 'visit_date', type: 'string', format: 'date'),
+                            new OA\Property(property: 'count', type: 'integer'),
+                            new OA\Property(property: 'days_elapsed', type: 'integer', example: 3),
+                        ])),
+                        new OA\Property(property: 'list', type: 'array', items: new OA\Items(properties: [
+                            new OA\Property(property: 'id', type: 'integer'),
+                            new OA\Property(property: 'visit_date', type: 'string', format: 'date'),
+                            new OA\Property(property: 'mr_number', type: 'string'),
+                            new OA\Property(property: 'clinic_name', type: 'string'),
+                            new OA\Property(property: 'doctor_name', type: 'string', nullable: true),
+                            new OA\Property(property: 'prov_diag', type: 'string', nullable: true, description: 'ICD-10 code(s) for provisional diagnosis'),
+                            new OA\Property(property: 'final_diag', type: 'string', nullable: true),
+                            new OA\Property(property: 'visit_status', type: 'string', example: 'P'),
+                        ])),
+                        new OA\Property(property: 'diagnosis_metadata', type: 'object',
+                            description: 'Map of ICD-10 code → {description, abbreviation}',
+                            additionalProperties: new OA\AdditionalProperties(properties: [
+                                new OA\Property(property: 'description', type: 'string'),
+                                new OA\Property(property: 'abbreviation', type: 'string', nullable: true),
+                            ], type: 'object')
+                        ),
+                    ]),
+                ])
+            ),
+        ]
+    )]
     public function pending(Request $request)
     {
         $startDate = $request->query('start_date', Carbon::today()->toDateString());

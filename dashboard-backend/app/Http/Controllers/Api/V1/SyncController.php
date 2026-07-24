@@ -18,7 +18,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
+use OpenApi\Attributes as OA;
 
+#[OA\Tag(name: 'Sync', description: 'Data synchronization from the external HIS API — all routes are intentionally public for LAN access')]
 class SyncController extends Controller
 {
     protected $syncService;
@@ -31,6 +33,29 @@ class SyncController extends Controller
         set_time_limit(0);
     }
 
+    #[OA\Get(
+        path: '/sync/{date}',
+        summary: 'Synchronous (blocking) sync for a single date',
+        description: 'Fetches data from the HIS API and upserts into the local database in the same HTTP request. Blocks until complete. Use `/sync/trigger/{date}` for async background sync. Pass `today` as the date to sync today\'s data.',
+        tags: ['Sync'],
+        parameters: [
+            new OA\Parameter(name: 'date', in: 'path', required: true,
+                schema: new OA\Schema(type: 'string', example: '2026-07-17'),
+                description: 'Date in YYYY-MM-DD or YYYYMMDD format.'
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Sync completed',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'message', type: 'string', example: 'Successfully synced 348 records for date 2026-07-17'),
+                    new OA\Property(property: 'sample_channeled_data', type: 'object', nullable: true),
+                ])
+            ),
+            new OA\Response(response: 500, description: 'Sync failed',
+                content: new OA\JsonContent(ref: '#/components/schemas/ApiError')
+            ),
+        ]
+    )]
     public function sync($date = null)
     {
         // Handle Ymd or Y-m-d
@@ -56,10 +81,27 @@ class SyncController extends Controller
         ], 500);
     }
 
-    /**
-     * Trigger a background sync for a specific date (default today).
-     * Returns immediately while the job runs in the queue.
-     */
+    #[OA\Get(
+        path: '/sync/trigger/{date}',
+        summary: 'Dispatch an async background sync job for a single date',
+        description: 'Returns immediately with a batch ID. Use `GET /sync/batch/{id}` to poll progress. Pass `today` to trigger today\'s sync.',
+        tags: ['Sync'],
+        parameters: [
+            new OA\Parameter(name: 'date', in: 'path', required: true,
+                schema: new OA\Schema(type: 'string', example: '2026-07-17'),
+                description: 'Date in YYYY-MM-DD or YYYYMMDD format.'
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Job dispatched',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'message', type: 'string', example: 'Sync job dispatched for date 2026-07-17'),
+                    new OA\Property(property: 'status', type: 'string', example: 'queued'),
+                    new OA\Property(property: 'batch_id', type: 'string', example: 'abc123def456'),
+                ])
+            ),
+        ]
+    )]
     public function triggerSync($date = null)
     {
         // Handle Ymd or Y-m-d
@@ -80,6 +122,31 @@ class SyncController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: '/sync/range',
+        summary: 'Synchronous (blocking) sync for a date range — max 366 days',
+        description: 'Fetches and upserts data from the HIS API for each date in the range sequentially. Will timeout on large ranges — use `/sync/enqueue/range` for ranges longer than a few weeks.',
+        tags: ['Sync'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: true,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-01')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: true,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Range sync completed',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'message', type: 'string'),
+                    new OA\Property(property: 'synced_days', type: 'integer', example: 17),
+                    new OA\Property(property: 'errors', type: 'object'),
+                ])
+            ),
+            new OA\Response(response: 400, description: 'Missing or invalid date params'),
+            new OA\Response(response: 500, description: 'Sync failed'),
+        ]
+    )]
     public function syncRange(Request $request)
     {
         $startDate = $request->query('start_date');
@@ -114,10 +181,29 @@ class SyncController extends Controller
         }
     }
 
-    /**
-     * Rebuild aggregated dashboard tables for a date range based on already-synced `visits`.
-     * This is much faster than `syncRange()` because it does NOT call the external API.
-     */
+    #[OA\Get(
+        path: '/sync/reaggregate/range',
+        summary: 'Rebuild aggregated stats from already-synced visits (no HIS API call)',
+        description: 'Recomputes daily_dashboard_stats and clinic_stats from the local visits table. Much faster than a full sync. Use when stats are out of sync with raw visit data.',
+        tags: ['Sync'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: true,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-01')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: true,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Reaggregation completed',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'rebuilt_days', type: 'integer', example: 17),
+                    new OA\Property(property: 'errors', type: 'object'),
+                ])
+            ),
+            new OA\Response(response: 400, description: 'Missing date params'),
+        ]
+    )]
     public function reaggregateRange(Request $request)
     {
         $startDate = $request->query('start_date');
@@ -155,10 +241,34 @@ class SyncController extends Controller
         ]);
     }
 
-    /**
-     * Queue a background sync of a date range.
-     * This avoids HTTP timeouts when syncing large ranges (e.g. an entire year).
-     */
+    #[OA\Get(
+        path: '/sync/enqueue/range',
+        summary: 'Queue background sync jobs for a date range — returns immediately',
+        description: 'Dispatches one SyncForDateJob per date into the queue. Returns a batch ID immediately. Safe for large ranges (up to 366 days). Poll with `GET /sync/batch/{id}`.',
+        tags: ['Sync'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: true,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-01-01')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: true,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+            new OA\Parameter(name: 'force', in: 'query', required: false,
+                schema: new OA\Schema(type: 'boolean', default: false),
+                description: 'Force re-sync even for dates that already have successful sync logs'
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Batch queued',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'message', type: 'string'),
+                    new OA\Property(property: 'batch_id', type: 'string', example: 'abc123def456'),
+                    new OA\Property(property: 'total_jobs', type: 'integer', example: 198),
+                ])
+            ),
+            new OA\Response(response: 400, description: 'Missing or invalid params'),
+        ]
+    )]
     public function enqueueSyncRange(Request $request)
     {
         $startDate = $request->query('start_date');
@@ -289,9 +399,26 @@ class SyncController extends Controller
         ], 202);
     }
 
-    /**
-     * Trigger the data healing process to fix missing names (e.g. Bill Doctor N/A).
-     */
+    #[OA\Get(
+        path: '/sync/heal-data',
+        summary: 'Heal missing data — fix records with blank doctor/clinic names from the HIS',
+        description: 'Queues a HealDataJob to backfill missing names (e.g. "Bill Doctor N/A") by re-fetching those records from the HIS API. Optionally scoped to a single date.',
+        tags: ['Sync'],
+        parameters: [
+            new OA\Parameter(name: 'date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-10'),
+                description: 'Scope healing to a specific date. Omit to heal all dates.'
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Healing job dispatched',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'message', type: 'string', example: 'Healing job dispatched'),
+                    new OA\Property(property: 'batch_id', type: 'string', nullable: true),
+                ])
+            ),
+        ]
+    )]
     public function healData(Request $request)
     {
         $date = $request->query('date');
@@ -306,9 +433,20 @@ class SyncController extends Controller
         ], 202);
     }
 
-    /**
-     * Force reset all sync states to unblock the UI.
-     */
+    #[OA\Post(
+        path: '/sync/reset-state',
+        summary: 'Force-clear all in-progress sync state to unblock the UI',
+        description: 'Cancels all non-finished batches and clears sync-related cache locks. Use when the UI is stuck showing "sync in progress" after a worker crash.',
+        tags: ['Sync'],
+        responses: [
+            new OA\Response(response: 200, description: 'Sync state reset',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'message', type: 'string', example: 'Sync state reset successfully'),
+                    new OA\Property(property: 'cancelled_batches', type: 'integer', example: 2),
+                ])
+            ),
+        ]
+    )]
     public function resetSyncState()
     {
         SyncLog::where('status', 'PENDING')->update(['status' => 'FAILED', 'error_message' => 'Manual Reset']);
@@ -319,9 +457,35 @@ class SyncController extends Controller
         return response()->json(['message' => 'Sync state reset and cache flushed successfully.']);
     }
 
-    /**
-     * Repair specific gaps by enqueueing sync jobs for provided dates.
-     */
+    #[OA\Post(
+        path: '/sync/repair-gaps',
+        summary: 'Queue sync jobs for specific gap dates detected by gap detection',
+        tags: ['Sync'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['dates'],
+                properties: [
+                    new OA\Property(
+                        property: 'dates',
+                        type: 'array',
+                        items: new OA\Items(type: 'string', format: 'date', example: '2026-06-15'),
+                        description: 'Array of YYYY-MM-DD dates to re-sync'
+                    ),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Gap repair jobs dispatched',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'message', type: 'string'),
+                    new OA\Property(property: 'batch_id', type: 'string', example: 'abc123def456'),
+                    new OA\Property(property: 'queued_dates', type: 'integer', example: 3),
+                ])
+            ),
+            new OA\Response(response: 400, description: 'Missing or invalid dates array'),
+        ]
+    )]
     public function repairGaps(Request $request)
     {
         $rawDates = $request->input('dates', []);
@@ -390,9 +554,23 @@ class SyncController extends Controller
         ], 202);
     }
 
-    /**
-     * Get status for a queued sync batch.
-     */
+    #[OA\Get(
+        path: '/sync/batch/{id}',
+        summary: 'Get the status and progress of a queued sync batch',
+        tags: ['Sync'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true,
+                schema: new OA\Schema(type: 'string', example: 'abc123def456'),
+                description: 'Batch ID returned by trigger or enqueue endpoints'
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Batch status',
+                content: new OA\JsonContent(ref: '#/components/schemas/BatchStatus')
+            ),
+            new OA\Response(response: 404, description: 'Batch not found'),
+        ]
+    )]
     public function batchStatus(string $id)
     {
         // Special case for 'auto' - return a global status if any sync is running
@@ -450,9 +628,23 @@ class SyncController extends Controller
         ]);
     }
 
-    /**
-     * Cancel a specific batch (user-initiated dismiss).
-     */
+    #[OA\Post(
+        path: '/sync/cancel-batch/{id}',
+        summary: 'Cancel a running or pending sync batch',
+        description: 'Marks the batch as cancelled. Already-running jobs will finish but no new jobs from the batch will be picked up.',
+        tags: ['Sync'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true,
+                schema: new OA\Schema(type: 'string', example: 'abc123def456')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Batch cancelled',
+                content: new OA\JsonContent(ref: '#/components/schemas/ApiSuccess')
+            ),
+            new OA\Response(response: 404, description: 'Batch not found'),
+        ]
+    )]
     public function cancelBatch($id)
     {
         $batch = Bus::findBatch($id);

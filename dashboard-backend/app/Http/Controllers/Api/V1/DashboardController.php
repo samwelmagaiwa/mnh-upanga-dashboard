@@ -15,7 +15,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
+use OpenApi\Attributes as OA;
 
+#[OA\Tag(name: 'Dashboard', description: 'Public dashboard statistics, charts, and real-time update polling')]
+#[OA\Tag(name: 'Sync', description: 'Data synchronization from the external HIS API — all routes are intentionally public')]
 class DashboardController extends Controller
 {
     private function getRemoteApiAvailability(): bool
@@ -89,6 +92,37 @@ class DashboardController extends Controller
         return $prefix . '_' . implode('_', $parts) . '_v' . $this->getCacheVersion();
     }
 
+    #[OA\Get(
+        path: '/dashboard/stats',
+        summary: 'Aggregated visit statistics for a date range',
+        description: 'Returns total visits, consultation status, patient categories (NHIF, public, foreigner, etc.), gender breakdown, age groups, and comparison stats vs. a previous equivalent period. Auto-syncs today\'s data if missing.',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17'),
+                description: 'Start of range (defaults to today)'
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17'),
+                description: 'End of range (defaults to today)'
+            ),
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Dashboard statistics',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'stats', ref: '#/components/schemas/DashboardStats'),
+                    new OA\Property(property: 'previous_stats', ref: '#/components/schemas/DashboardStats', nullable: true),
+                    new OA\Property(property: 'comp_label', type: 'string', example: 'vs. previous day'),
+                    new OA\Property(property: 'remote_api_available', type: 'boolean', example: true),
+                    new OA\Property(property: 'synced_stats', ref: '#/components/schemas/DashboardStats', nullable: true,
+                        description: 'Most recent synced data — returned as fallback when remote API is unavailable'
+                    ),
+                ])
+            ),
+        ]
+    )]
     public function getStats(Request $request)
     {
         $startDate = $request->query('start_date');
@@ -297,9 +331,29 @@ class DashboardController extends Controller
         ];
     }
 
-    /**
-     * Get clinic-wise breakdown for a specific date range.
-     */
+    #[OA\Get(
+        path: '/dashboard/clinics',
+        summary: 'Clinic-wise visit breakdown for a date range',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Clinic breakdown',
+                content: new OA\JsonContent(
+                    type: 'array',
+                    items: new OA\Items(ref: '#/components/schemas/ClinicBreakdown')
+                )
+            ),
+        ]
+    )]
     public function getClinicBreakdown(Request $request)
     {
         $startDate = $request->query('start_date');
@@ -399,6 +453,32 @@ class DashboardController extends Controller
      * Get detailed visit-level breakdown for clinics.
      * Uses pagination to prevent PHP memory/timeout crashes on large date ranges.
      */
+    #[OA\Get(
+        path: '/dashboard/detailed-clinics',
+        summary: 'Detailed visit-level clinic breakdown (paginated)',
+        description: 'Returns raw visit records grouped by clinic. Paginated to prevent memory issues on large ranges.',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-01')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+            new OA\Parameter(name: 'clinic', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', example: 'All Clinics'),
+                description: 'Filter to a specific clinic name, or "All Clinics" for all'
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Detailed clinic visits',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'data', type: 'array', items: new OA\Items(type: 'object')),
+                    new OA\Property(property: 'total', type: 'integer'),
+                ])
+            ),
+        ]
+    )]
     public function getDetailedClinicVisits(Request $request)
     {
         $startDate = $request->query('start_date');
@@ -478,9 +558,30 @@ class DashboardController extends Controller
         });
     }
 
-    /**
-     * Get missing data dates (Gaps).
-     */
+    #[OA\Get(
+        path: '/dashboard/gaps',
+        summary: 'Detect missing or zero-visit days in a date range',
+        description: 'Compares expected operational days against actual aggregated records. Returns MISSING (no record) or EMPTY (record exists but zero visits). Skips non-operational weekdays (Sundays by default) and configured public holidays.',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-01')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Gap detection result',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'gaps', type: 'array', items: new OA\Items(ref: '#/components/schemas/GapEntry')),
+                    new OA\Property(property: 'total_gaps', type: 'integer', example: 3),
+                    new OA\Property(property: 'expected_days', type: 'integer', example: 22),
+                    new OA\Property(property: 'recorded_days', type: 'integer', example: 19),
+                ])
+            ),
+        ]
+    )]
     public function getGaps(Request $request)
     {
         $startDate = $request->query('start_date', Carbon::today()->subDays(30)->toDateString());
@@ -499,9 +600,34 @@ class DashboardController extends Controller
         ];
     }
 
-    /**
-     * Get data for pie charts (Gender, Visit Type).
-     */
+    #[OA\Get(
+        path: '/dashboard/pie-stats',
+        summary: 'Pie chart data — gender split and visit type distribution',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Pie chart data',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'gender', type: 'object', properties: [
+                        new OA\Property(property: 'male', type: 'integer', example: 620),
+                        new OA\Property(property: 'female', type: 'integer', example: 590),
+                        new OA\Property(property: 'no_gender', type: 'integer', example: 10),
+                    ]),
+                    new OA\Property(property: 'visit_type', type: 'object', properties: [
+                        new OA\Property(property: 'new', type: 'integer', example: 800),
+                        new OA\Property(property: 'followup', type: 'integer', example: 440),
+                    ]),
+                ])
+            ),
+        ]
+    )]
     public function getPieStats(Request $request)
     {
         $startDate = $request->query('start_date');
@@ -568,9 +694,28 @@ class DashboardController extends Controller
         });
     }
 
-    /**
-     * Get comparison stats for Radar Chart (Current vs Previous Period)
-     */
+    #[OA\Get(
+        path: '/dashboard/chart-stats',
+        summary: 'Radar chart — current period vs. previous equivalent period',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Comparison chart data',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'current', ref: '#/components/schemas/DashboardStats'),
+                    new OA\Property(property: 'previous', ref: '#/components/schemas/DashboardStats', nullable: true),
+                    new OA\Property(property: 'label', type: 'string', example: 'vs. previous week'),
+                ])
+            ),
+        ]
+    )]
     public function getComparisonStats(Request $request)
     {
         $startDate = $request->query('start_date', date('Y-m-d'));
@@ -618,10 +763,31 @@ class DashboardController extends Controller
         });
     }
 
-    /**
-     * Get aggregate service trends for the grouped bar chart.
-     * Now dynamically respects the exact date range to match cards data.
-     */
+    #[OA\Get(
+        path: '/dashboard/service-trends',
+        summary: 'Service trend data for the grouped bar chart',
+        description: 'Returns daily totals across new visits, follow-ups, NHIF, and emergency per day in the selected range.',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-01')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Service trends',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'labels', type: 'array', items: new OA\Items(type: 'string', example: '2026-07-01')),
+                    new OA\Property(property: 'datasets', type: 'array', items: new OA\Items(properties: [
+                        new OA\Property(property: 'label', type: 'string', example: 'New Visits'),
+                        new OA\Property(property: 'data', type: 'array', items: new OA\Items(type: 'integer')),
+                    ])),
+                ])
+            ),
+        ]
+    )]
     public function getServiceTrends(Request $request)
     {
         $period = $request->query('period', 'day');
@@ -896,10 +1062,30 @@ class DashboardController extends Controller
     /**
      * Get detailed referral hospital distribution.
      */
-    /**
-     * Get detailed referral hospital distribution.
-     * Optimized to use pre-aggregated DailyReferralStat table.
-     */
+    #[OA\Get(
+        path: '/dashboard/referral-stats',
+        summary: 'Referral hospital distribution for a date range',
+        description: 'Reads from pre-aggregated daily_referral_stats table. Returns top referring hospitals and their visit counts.',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-01')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Referral stats',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'data', type: 'array', items: new OA\Items(properties: [
+                        new OA\Property(property: 'ref_hosp_nm', type: 'string', example: 'Muhimbili National Hospital'),
+                        new OA\Property(property: 'total', type: 'integer', example: 45),
+                    ])),
+                ])
+            ),
+        ]
+    )]
     public function getReferralStats(Request $request)
     {
         $startDate = $request->query('start_date', date('Y-m-d'));
@@ -934,10 +1120,29 @@ class DashboardController extends Controller
         });
     }
 
-    /**
-     * Get a complete snapshot of dashboard data in one request.
-     * Consolidates all core metrics for the dashboard.
-     */
+    #[OA\Get(
+        path: '/dashboard/snapshot',
+        summary: 'Full dashboard snapshot — all core metrics in one request',
+        description: 'Consolidates stats, clinics, pie data, and trends in a single call. Used for initial page load.',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Complete dashboard snapshot',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'stats', ref: '#/components/schemas/DashboardStats'),
+                    new OA\Property(property: 'clinics', type: 'array', items: new OA\Items(ref: '#/components/schemas/ClinicBreakdown')),
+                    new OA\Property(property: 'remote_api_available', type: 'boolean'),
+                ])
+            ),
+        ]
+    )]
     public function getSnapshot(Request $request)
     {
         $startDate = $request->query('start_date', date('Y-m-d'));
@@ -970,9 +1175,28 @@ class DashboardController extends Controller
         return $data;
     }
 
-    /**
-     * Get gender distribution statistics for a radar chart (by month).
-     */
+    #[OA\Get(
+        path: '/dashboard/gender-radar',
+        summary: 'Monthly gender distribution for radar chart',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-01-01')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Gender radar data',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'labels', type: 'array', items: new OA\Items(type: 'string', example: 'Jan')),
+                    new OA\Property(property: 'male', type: 'array', items: new OA\Items(type: 'integer')),
+                    new OA\Property(property: 'female', type: 'array', items: new OA\Items(type: 'integer')),
+                ])
+            ),
+        ]
+    )]
     public function getGenderRadarStats(Request $request)
     {
         $startDate = $request->query('start_date', Carbon::today()->startOfMonth()->toDateString());
@@ -1016,9 +1240,32 @@ class DashboardController extends Controller
         });
     }
 
-    /**
-     * Get list of MR numbers for patients not yet consulted.
-     */
+    #[OA\Get(
+        path: '/dashboard/pending-patients',
+        summary: 'List of patients not yet consulted (visit_status != C)',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Pending patients',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'data', type: 'array', items: new OA\Items(properties: [
+                        new OA\Property(property: 'mr_number', type: 'string'),
+                        new OA\Property(property: 'clinic_name', type: 'string'),
+                        new OA\Property(property: 'visit_date', type: 'string', format: 'date'),
+                        new OA\Property(property: 'visit_status', type: 'string', example: 'P'),
+                    ])),
+                    new OA\Property(property: 'total', type: 'integer'),
+                ])
+            ),
+        ]
+    )]
     public function getPendingPatients(Request $request)
     {
         $startDate = $request->query('start_date');
@@ -1065,9 +1312,32 @@ class DashboardController extends Controller
         });
     }
 
-    /**
-     * Get list of duplicate visits captured during sync.
-     */
+    #[OA\Get(
+        path: '/dashboard/duplicated-data',
+        summary: 'Duplicate visit records detected during the last sync',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Duplicate visits',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'data', type: 'array', items: new OA\Items(properties: [
+                        new OA\Property(property: 'mr_number', type: 'string'),
+                        new OA\Property(property: 'visit_date', type: 'string', format: 'date'),
+                        new OA\Property(property: 'clinic_name', type: 'string'),
+                        new OA\Property(property: 'occurrence_count', type: 'integer', example: 3),
+                    ])),
+                    new OA\Property(property: 'total', type: 'integer'),
+                ])
+            ),
+        ]
+    )]
     public function getDuplicateVisits(Request $request)
     {
         $startDate = $request->query('start_date');
@@ -1149,6 +1419,27 @@ class DashboardController extends Controller
      * Super-fast polling endpoint for real-time detection.
      * No caching - always returns fresh data.
      */
+    #[OA\Get(
+        path: '/dashboard/check-updates',
+        summary: 'Fast polling endpoint — detect data changes without fetching full stats',
+        description: 'Called every 3–15 seconds by the frontend. Returns a version hash, latest visit ID, today\'s count, and sync status. Used to trigger silent refreshes only when data has actually changed. Never cached.',
+        tags: ['Dashboard'],
+        responses: [
+            new OA\Response(response: 200, description: 'Update status',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'version', type: 'string', example: 'a1b2c3d4'),
+                    new OA\Property(property: 'latest_visit_id', type: 'integer', example: 48291),
+                    new OA\Property(property: 'today_count', type: 'integer', example: 348),
+                    new OA\Property(property: 'total_count', type: 'integer', example: 91240),
+                    new OA\Property(property: 'remote_api_available', type: 'boolean', example: true),
+                    new OA\Property(property: 'is_syncing', type: 'boolean', example: false),
+                    new OA\Property(property: 'active_batch_id', type: 'string', nullable: true),
+                    new OA\Property(property: 'sync_needed', type: 'boolean', example: false),
+                    new OA\Property(property: 'is_up_to_date', type: 'boolean', example: true),
+                ])
+            ),
+        ]
+    )]
     public function checkUpdates(Request $request)
     {
         $today = date('Y-m-d');
@@ -1233,10 +1524,40 @@ class DashboardController extends Controller
           ->header('Expires', '0');
     }
 
-    /**
-     * Get the top 10 diseases with a clinic breakdown for a given date range.
-     * Used for the Admin Dashboard stacked horizontal bar chart.
-     */
+    #[OA\Get(
+        path: '/dashboard/top-diseases',
+        summary: 'Top ICD-10 diagnoses with per-clinic breakdown',
+        description: 'Returns the most frequent diagnoses (provisional + final) enriched with ICD-10 descriptions and abbreviations. Used for the stacked horizontal bar chart on the Admin Dashboard.',
+        tags: ['Dashboard'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-01')
+            ),
+            new OA\Parameter(name: 'end_date', in: 'query', required: false,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-07-17')
+            ),
+            new OA\Parameter(name: 'limit', in: 'query', required: false,
+                schema: new OA\Schema(type: 'integer', default: 10, example: 10),
+                description: 'Number of top diseases to return'
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Top diseases with clinic breakdown',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'data', type: 'array', items: new OA\Items(properties: [
+                        new OA\Property(property: 'code', type: 'string', example: 'J06.9'),
+                        new OA\Property(property: 'description', type: 'string', example: 'Acute upper respiratory infection'),
+                        new OA\Property(property: 'abbreviation', type: 'string', nullable: true, example: 'URTI'),
+                        new OA\Property(property: 'total', type: 'integer', example: 120),
+                        new OA\Property(property: 'by_clinic', type: 'array', items: new OA\Items(properties: [
+                            new OA\Property(property: 'clinic_name', type: 'string'),
+                            new OA\Property(property: 'count', type: 'integer'),
+                        ])),
+                    ])),
+                ])
+            ),
+        ]
+    )]
     public function getTopDiseases(Request $request)
     {
         $startDate = $request->query('start_date', date('Y-m-d'));
