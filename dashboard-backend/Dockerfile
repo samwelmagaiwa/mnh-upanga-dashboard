@@ -26,7 +26,13 @@ RUN apk add --no-cache \
     libzip-dev \
     icu-dev \
     mysql-client \
+    autoconf \
+    g++ \
+    make \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip intl \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apk del autoconf g++ make \
     && mkdir -p /run/nginx
 
 # Nginx config (extracted from heredoc — easier to lint and diff)

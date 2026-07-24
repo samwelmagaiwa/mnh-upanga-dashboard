@@ -17,6 +17,8 @@ services:
       MARIADB_DATABASE: dashboard
       MARIADB_USER: dashboard
       MARIADB_PASSWORD: secret
+    ports:
+      - "127.0.0.1:3306:3306"
     volumes:
       - db_data:/var/lib/mysql
     networks:

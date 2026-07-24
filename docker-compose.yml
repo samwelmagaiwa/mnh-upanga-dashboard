@@ -1,6 +1,4 @@
 x-backend-service: &backend-service
-  build:
-    context: ./dashboard-backend
   image: ${BACKEND_IMAGE:-samwelmagaiwa/dashboard-backend}:${IMAGE_TAG:-latest}
   restart: unless-stopped
   env_file:
@@ -13,6 +11,8 @@ x-backend-service: &backend-service
 services:
   dashboard_backend:
     <<: *backend-service
+    build:
+      context: ./dashboard-backend
     environment:
       CONTAINER_ROLE: web
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-false}
