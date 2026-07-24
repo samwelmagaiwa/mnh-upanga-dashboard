@@ -33,7 +33,7 @@ class HealthController
             $overallOk = false;
         }
 
-        // HIS API reachability (cached 60s so we don't hammer it)
+        // HIS API reachability — HEAD base URL (cached 60s); any sub-500 response = server is up
         $checks['his_api'] = Cache::remember('health:his_api', 60, function () {
             try {
                 $baseUrl = config('dashboard.sync.base_url');
@@ -42,7 +42,8 @@ class HealthController
                     config('dashboard.sync.password')
                 )->connectTimeout(5)->timeout(10)->head($baseUrl);
 
-                return ['status' => $response->status() < 500 ? 'ok' : 'fail', 'http_code' => $response->status()];
+                $ok = $response->status() < 500;
+                return ['status' => $ok ? 'ok' : 'fail', 'http_code' => $response->status()];
             } catch (\Throwable $e) {
                 return ['status' => 'fail', 'error' => $e->getMessage()];
             }
@@ -52,12 +53,14 @@ class HealthController
             $overallOk = false;
         }
 
-        // Queue (check Horizon is running via Redis key)
+        // Queue — check Horizon master supervisor via its repository
         try {
-            $horizonStatus = Redis::get('horizon:'.config('horizon.prefix', '').'master_supervisor_status');
+            $masters = app(\Laravel\Horizon\Contracts\MasterSupervisorRepository::class)->all();
+            $running = collect($masters)->contains(fn ($m) => ($m->status ?? '') !== 'paused');
             $checks['queue'] = [
-                'status' => 'ok',
-                'horizon' => $horizonStatus ? json_decode($horizonStatus, true)['status'] ?? 'unknown' : 'not_running',
+                'status'  => 'ok',
+                'horizon' => $running ? 'running' : 'paused',
+                'masters' => count($masters),
             ];
         } catch (\Throwable $e) {
             $checks['queue'] = ['status' => 'ok', 'horizon' => 'unknown'];
@@ -66,7 +69,7 @@ class HealthController
         // Sync lag (how many minutes since last successful sync)
         try {
             $lastSync = \App\Models\SyncLog::where('status', 'SUCCESS')->latest('finished_at')->first();
-            $lagMinutes = $lastSync ? now()->diffInMinutes($lastSync->finished_at) : null;
+            $lagMinutes = $lastSync ? max(0, (int) now()->diffInMinutes($lastSync->finished_at, false)) : null;
             $checks['sync_lag'] = [
                 'status' => $lagMinutes === null || $lagMinutes > 60 ? 'warn' : 'ok',
                 'last_success_minutes_ago' => $lagMinutes,
