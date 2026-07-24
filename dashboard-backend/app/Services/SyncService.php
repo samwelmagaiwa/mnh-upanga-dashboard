@@ -172,7 +172,7 @@ class SyncService
 
         try {
             $dateYmd = Carbon::parse($date)->format('Ymd');
-            $baseUrl = config('dashboard.sync.base_url', env('DASHBOARD_API_BASE_URL', 'http://192.168.235.250/labsms/swagger/dashboard'));
+            $baseUrl = config('dashboard.sync.base_url', env('DASHBOARD_API_BASE_URL', 'http://192.168.235.250/labsms/swagger/mnh_dashboard'));
             $url = "{$baseUrl}/{$dateYmd}";
             
             $syncLog = SyncLog::updateOrCreate(
@@ -330,7 +330,7 @@ class SyncService
         $chunks = array_chunk($dates, 20);
         $username = config('dashboard.sync.username', env('DASHBOARD_API_USERNAME'));
         $password = config('dashboard.sync.password', env('DASHBOARD_API_PASSWORD'));
-        $baseUrl = config('dashboard.sync.base_url', env('DASHBOARD_API_BASE_URL', 'http://192.168.235.250/labsms/swagger/dashboard'));
+        $baseUrl = config('dashboard.sync.base_url', env('DASHBOARD_API_BASE_URL', 'http://192.168.235.250/labsms/swagger/mnh_dashboard'));
 
         // For larger ranges, we should ALWAYS use the background queue to avoid timeouts
         // and ensure each date is retried independently.
@@ -575,8 +575,8 @@ class SyncService
 
             // Generate fallback cons_no if missing - ensures uniqueness for multiple consultations
             $consNo = $cleanData['consNo'] ?? null;
-            if (empty($consNo)) {
-                // Use visit_num + cons_time or index as fallback
+            // New API sends boolean false instead of null when no consNo
+            if (empty($consNo) || $consNo === false) {
                 $consTime = $cleanData['consTime'] ?? null;
                 $timePart = $consTime ? str_replace(':', '', $consTime) : $index;
                 $consNo = ($cleanData['visitNum'] ?? '') . '-' . $timePart;

@@ -820,7 +820,7 @@ const exportPendingToExcel = async () => {
 
     // Row 1 — Main title
     summaryRows.push([
-      sc('MUHIMBILI NATIONAL HOSPITAL (MNH) – MLOGANZILA', CLR_HEADER_BG, true, 14, 'center', CLR_GOLD_TXT),
+      sc('MUHIMBILI NATIONAL HOSPITAL (MNH) – UPANGA', CLR_HEADER_BG, true, 14, 'center', CLR_GOLD_TXT),
       sc('', CLR_HEADER_BG), sc('', CLR_HEADER_BG), sc('', CLR_HEADER_BG),
       sc('', CLR_HEADER_BG), sc('', CLR_HEADER_BG), sc('', CLR_HEADER_BG), sc('', CLR_HEADER_BG),
     ])
@@ -943,7 +943,7 @@ const exportPendingToExcel = async () => {
 
     // Title block
     detailRows.push([
-      sc('MUHIMBILI NATIONAL HOSPITAL (MNH) – MLOGANZILA', CLR_HEADER_BG, true, 14, 'center', CLR_GOLD_TXT),
+      sc('MUHIMBILI NATIONAL HOSPITAL (MNH) – UPANGA', CLR_HEADER_BG, true, 14, 'center', CLR_GOLD_TXT),
       sc('', CLR_HEADER_BG), sc('', CLR_HEADER_BG), sc('', CLR_HEADER_BG), sc('', CLR_HEADER_BG), sc('', CLR_HEADER_BG),
     ])
     detailRows.push([

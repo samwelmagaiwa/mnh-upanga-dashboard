@@ -15,12 +15,12 @@ const today = computed(() => {
     <div>
       <a href="#" target="_blank"></a>
       <span class="ms-1"
-        >&copy; {{ new Date().getFullYear() }} Muhimbili-Mloganzila. Today's Date: {{ today }}</span
+        >&copy; {{ new Date().getFullYear() }} MNH Upanga. Today's Date: {{ today }}</span
       >
     </div>
     <div class="ms-auto">
       <span class="me-1" target="_blank">Powered by</span>
-      <a href="#">Muhimbili-Mloganzila.</a>
+      <a href="#">MNH Upanga ICT.</a>
     </div>
   </CFooter>
 </template>

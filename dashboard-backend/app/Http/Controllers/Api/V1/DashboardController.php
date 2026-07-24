@@ -29,7 +29,7 @@ class DashboardController extends Controller
             try {
                 $username = config('dashboard.sync.username', env('DASHBOARD_API_USERNAME'));
                 $password = config('dashboard.sync.password', env('DASHBOARD_API_PASSWORD'));
-                $baseUrl = config('dashboard.sync.base_url', env('DASHBOARD_API_BASE_URL', 'http://192.168.235.250/labsms/swagger/dashboard'));
+                $baseUrl = config('dashboard.sync.base_url', env('DASHBOARD_API_BASE_URL', 'http://192.168.235.250/labsms/swagger/mnh_dashboard'));
                 $url = rtrim($baseUrl, '/') . '/' . now()->format('Ymd');
 
                 $response = Http::withBasicAuth($username, $password)

@@ -24,7 +24,7 @@ class SyncWatcher extends Command
         while (true) {
             $today    = Carbon::today()->format('Y-m-d');
             $todayYmd = Carbon::today()->format('Ymd');
-            $baseUrl  = env('DASHBOARD_API_BASE_URL', 'http://192.168.235.250/labsms/swagger/dashboard');
+            $baseUrl  = env('DASHBOARD_API_BASE_URL', 'http://192.168.235.250/labsms/swagger/mnh_dashboard');
             $url      = "{$baseUrl}/{$todayYmd}";
 
             try {

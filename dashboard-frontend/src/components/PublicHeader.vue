@@ -105,7 +105,7 @@ onMounted(() => {
         <CNavItem>
           <CNavLink href="/" class="d-flex align-items-center p-0">
             <img src="@/assets/images/muhilogo.jpg" height="40" class="me-2" alt="Logo" />
-            <span class="fw-bold text-primary d-none d-md-inline">MNH MLOGANZILA DASHBOARD</span>
+            <span class="fw-bold text-primary d-none d-md-inline">MNH UPANGA DASHBOARD</span>
           </CNavLink>
         </CNavItem>
       </CHeaderNav>
