@@ -191,7 +191,7 @@ class SyncService
 
             $response = Http::withBasicAuth($username, $password)
                 ->connectTimeout(15)
-                ->timeout(120)
+                ->timeout(240)
                 ->retry(3, 2000, fn ($e) => $e instanceof \Illuminate\Http\Client\ConnectionException)
                 ->get($url);
 
