@@ -66,13 +66,23 @@ class HealthController
             $checks['queue'] = ['status' => 'ok', 'horizon' => 'unknown'];
         }
 
-        // Sync lag (how many minutes since last successful sync)
+        // Sync lag — treat an in-progress sync as "fresh" (sync:auto-daily re-queues every 10 min)
         try {
-            $lastSync = \App\Models\SyncLog::where('status', 'SUCCESS')->latest('finished_at')->first();
-            $lagMinutes = $lastSync ? max(0, (int) now()->diffInMinutes($lastSync->finished_at, false)) : null;
+            $today = now()->toDateString();
+            $processing = \App\Models\SyncLog::where('status', 'PROCESSING')
+                ->where('started_at', '>=', now()->subMinutes(30))
+                ->exists();
+
+            $lastSuccess = \App\Models\SyncLog::where('status', 'SUCCESS')
+                ->latest('finished_at')->first();
+
+            $lagMinutes = $processing ? 0
+                : ($lastSuccess ? max(0, (int) now()->diffInSeconds($lastSuccess->finished_at) / 60) : null);
+
             $checks['sync_lag'] = [
-                'status' => $lagMinutes === null || $lagMinutes > 60 ? 'warn' : 'ok',
+                'status'                   => ($lagMinutes === null || $lagMinutes > 90) ? 'warn' : 'ok',
                 'last_success_minutes_ago' => $lagMinutes,
+                'sync_in_progress'         => $processing,
             ];
         } catch (\Throwable $e) {
             $checks['sync_lag'] = ['status' => 'unknown'];
