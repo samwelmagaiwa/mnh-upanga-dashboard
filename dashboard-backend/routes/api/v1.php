@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\DashboardController;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\ReportsController;
 
 /*
@@ -12,6 +13,9 @@ use App\Http\Controllers\Api\V1\ReportsController;
 | V1 API Routes
 |--------------------------------------------------------------------------
 */
+
+// Health check (public — for uptime monitors)
+Route::get('/health', [HealthController::class, 'check']);
 
 // Public Auth Routes
 Route::post('/login', [AuthController::class, 'login']);

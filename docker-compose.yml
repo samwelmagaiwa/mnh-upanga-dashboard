@@ -19,32 +19,14 @@ services:
     expose:
       - "80"
 
-  dashboard_worker_1:
+  dashboard_horizon:
     <<: *backend-service
     depends_on:
       - dashboard_backend
     environment:
-      CONTAINER_ROLE: worker
+      CONTAINER_ROLE: horizon
       RUN_MIGRATIONS: "false"
-    command: ["php", "artisan", "queue:work", "--queue=high,default", "--sleep=3", "--tries=3", "--timeout=900"]
-
-  dashboard_worker_2:
-    <<: *backend-service
-    depends_on:
-      - dashboard_backend
-    environment:
-      CONTAINER_ROLE: worker
-      RUN_MIGRATIONS: "false"
-    command: ["php", "artisan", "queue:work", "--queue=high,default", "--sleep=3", "--tries=3", "--timeout=900"]
-
-  dashboard_worker_3:
-    <<: *backend-service
-    depends_on:
-      - dashboard_backend
-    environment:
-      CONTAINER_ROLE: worker
-      RUN_MIGRATIONS: "false"
-    command: ["php", "artisan", "queue:work", "--queue=high,default", "--sleep=3", "--tries=3", "--timeout=900"]
+    command: ["php", "artisan", "horizon"]
 
   dashboard_scheduler:
     <<: *backend-service

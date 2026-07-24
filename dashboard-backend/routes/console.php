@@ -10,6 +10,8 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('sync:auto-daily')->everyTenMinutes();
+Schedule::command('sync:heal-gaps --days=30')->dailyAt('02:00');
+Schedule::command('horizon:snapshot')->everyFiveMinutes();
 
 Artisan::command('dashboard:refresh-duplicate-occurrences {date}', function () {
     $date = $this->argument('date');

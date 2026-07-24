@@ -53,21 +53,7 @@ services:
     ports:
       - "127.0.0.1:8000:80"
 
-  dashboard_worker_1:
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  dashboard_worker_2:
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  dashboard_worker_3:
+  dashboard_horizon:
     depends_on:
       db:
         condition: service_healthy
