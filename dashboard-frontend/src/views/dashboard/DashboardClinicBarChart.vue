@@ -242,8 +242,16 @@ const chartOptions = computed(() => {
         usePointStyle: true,
         titleFont: { size: 13, weight: '800', family: "'Outfit', sans-serif" },
         bodyFont: { size: 12, weight: '600', family: "'Outfit', sans-serif" },
+        footerFont: { size: 11, weight: '700', family: "'Outfit', sans-serif" },
+        footerColor: '#dc2626',
+        footerMarginTop: 8,
         displayColors: true,
         callbacks: {
+          title: (items) => {
+            // Chart.js joins array labels with ", " — fix to space
+            const label = items[0]?.label
+            return Array.isArray(label) ? label.join(' ') : (label || '')
+          },
           label: (ctx) => {
             const clinic = clinics[ctx.dataIndex]
             if (!clinic) return ''
@@ -254,17 +262,40 @@ const chartOptions = computed(() => {
             const clinic = clinics[ctx.dataIndex]
             if (!clinic) return ''
             const lines = []
-            
+
             if (ctx.datasetIndex === 0) {
               const pendingLabel = dashboard.isTodaySelected ? 'Await Consultation' : 'Not Consulted'
               lines.push(`  Consulted: ${clinic.consulted || 0}`)
               lines.push(`  ${pendingLabel}: ${clinic.pending || 0}`)
-              
+
               const sign = (clinic.trend || 0) > 0 ? '+' : ''
               lines.push(`  Change: ${sign}${clinic.trend}% (${clinic.interpretation})`)
             } else {
               lines.push(`  Not Consulted: ${clinic.previous_pending || 0}`)
             }
+            return lines
+          },
+          footer: (items) => {
+            const ctx = items[0]
+            if (!ctx || ctx.datasetIndex !== 0) return []
+            const clinic = clinics[ctx.dataIndex]
+            if (!clinic || !clinic.clinic_name.toUpperCase().includes('EMERGENCY')) return []
+
+            // Show all emergency clinics as a breakdown
+            const emergencies = sortedClinics.value.filter((c) =>
+              c.clinic_name.toUpperCase().includes('EMERGENCY'),
+            )
+            if (emergencies.length <= 1) return []
+
+            const total = emergencies.reduce((s, c) => s + (c.total_visits || 0), 0)
+            const lines = ['', '⚡ Emergency Breakdown:']
+            emergencies.forEach((ec) => {
+              const isCurrent = ec.clinic_name === clinic.clinic_name
+              const marker = isCurrent ? '▶' : '   '
+              lines.push(`${marker} ${ec.clinic_name}: ${ec.total_visits}`)
+            })
+            lines.push(`   ─────────────────`)
+            lines.push(`   Total: ${total}`)
             return lines
           },
         },
