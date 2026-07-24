@@ -190,9 +190,9 @@ class SyncService
             $password = config('dashboard.sync.password', env('DASHBOARD_API_PASSWORD'));
 
             $response = Http::withBasicAuth($username, $password)
-                ->connectTimeout(5)
-                ->timeout(60)
-                ->retry(2, 500)
+                ->connectTimeout(15)
+                ->timeout(120)
+                ->retry(3, 2000, fn ($e) => $e instanceof \Illuminate\Http\Client\ConnectionException)
                 ->get($url);
 
             if ($response->successful()) {
