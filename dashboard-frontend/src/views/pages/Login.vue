@@ -22,7 +22,7 @@ const handleLogin = async () => {
   })
 
   if (result.success) {
-    router.push('/')
+    router.push('/dashboard')
   } else {
     errorMessage.value = result.message
     isLoading.value = false
