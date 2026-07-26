@@ -115,8 +115,11 @@ const deleteAvatar = async () => {
   }
 }
 
+const defaultAvatar =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e0e0e0'/%3E%3Ccircle cx='50' cy='38' r='18' fill='%23bdbdbd'/%3E%3Cellipse cx='50' cy='85' rx='28' ry='20' fill='%23bdbdbd'/%3E%3C/svg%3E"
+
 const getAvatarUrl = (path) => {
-  if (!path) return 'src/assets/images/avatars/8.jpg' // Default or handle asset
+  if (!path) return defaultAvatar
   if (path.startsWith('http')) return path
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
   const baseUrl = apiBaseUrl.startsWith('http')
