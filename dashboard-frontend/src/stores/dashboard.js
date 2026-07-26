@@ -1308,5 +1308,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     isBUFilterLoading,
     fetchBusinessUnits,
     filterClinicsByBU,
+    api,
+    token,
   }
 })
