@@ -49,15 +49,8 @@ const fallbackDiseaseDepartmentColors = [
 ]
 
 onMounted(() => {
-  // Check if user is authenticated and has admin role
   if (!dashboard.isAuthenticated) {
     router.push('/login')
-    return
-  }
-
-  const adminRoles = ['ED', 'DED', 'DICT']
-  if (!adminRoles.includes(dashboard.user?.role)) {
-    router.push('/')
     return
   }
 
@@ -351,7 +344,7 @@ const getPercentage = (valueTitle, totalTitle) => {
           </CDropdown>
 
           <div class="badge bg-primary-gradient px-3 py-2" style="font-size: 0.9rem">
-            <span class="fw-bold">{{ dashboard.user?.role }}</span> Access
+            <span class="fw-bold">Admin</span> Access
           </div>
         </div>
       </div>
