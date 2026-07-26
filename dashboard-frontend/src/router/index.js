@@ -84,7 +84,7 @@ router.beforeEach((to, from, next) => {
 
   // Redirect authenticated users away from login
   if (to.name === 'Login' && token) {
-    return next({ name: 'Dashboard' })
+    return next({ name: 'PublicDashboard' })
   }
 
   next()
