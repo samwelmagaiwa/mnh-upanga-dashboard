@@ -35,6 +35,7 @@ onMounted(() => {
 
 const getToken = () => localStorage.getItem('mnh_token')
 const apiBase = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+const isDeletingAvatar = ref(false)
 
 const fetchProfile = async () => {
   try {
@@ -92,6 +93,28 @@ const updateProfile = async () => {
   }
 }
 
+const deleteAvatar = async () => {
+  if (!user.value.avatar) return
+  isDeletingAvatar.value = true
+  error.value = ''
+  message.value = ''
+  try {
+    const res = await axios.delete(`${apiBase}/profile/avatar`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+    if (res.data.status === 'success') {
+      user.value.avatar = null
+      dashboard.user = { ...dashboard.user, avatar: null }
+      localStorage.setItem('mnh_user', JSON.stringify(dashboard.user))
+      message.value = 'Profile picture removed.'
+    }
+  } catch (e) {
+    error.value = 'Failed to remove profile picture.'
+  } finally {
+    isDeletingAvatar.value = false
+  }
+}
+
 const getAvatarUrl = (path) => {
   if (!path) return 'src/assets/images/avatars/8.jpg' // Default or handle asset
   if (path.startsWith('http')) return path
@@ -127,6 +150,17 @@ const getAvatarUrl = (path) => {
               class="form-control form-control-sm"
               accept="image/*"
             />
+          </div>
+          <div v-if="user.avatar" class="mb-3">
+            <CButton
+              color="danger"
+              variant="outline"
+              size="sm"
+              :disabled="isDeletingAvatar"
+              @click="deleteAvatar"
+            >
+              {{ isDeletingAvatar ? 'Removing...' : 'Remove Picture' }}
+            </CButton>
           </div>
         </div>
 

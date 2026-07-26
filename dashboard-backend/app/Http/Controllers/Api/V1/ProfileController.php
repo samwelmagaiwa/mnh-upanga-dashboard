@@ -113,8 +113,26 @@ class ProfileController extends Controller
             'status' => 'success',
             'message' => 'Profile updated successfully',
             'data' => [
-                'user' => $user->fresh() // Reload to get any accessors/casts if added
+                'user' => $user->fresh()
             ]
+        ]);
+    }
+
+    public function deleteAvatar(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->avatar) {
+            $relativePath = str_replace('storage/', '', $user->avatar);
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($relativePath);
+            $user->avatar = null;
+            $user->save();
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Avatar removed',
+            'data' => ['user' => $user->fresh()]
         ]);
     }
 }

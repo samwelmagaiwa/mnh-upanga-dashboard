@@ -67,5 +67,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('profile')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\V1\ProfileController::class, 'show']);
         Route::put('/', [\App\Http\Controllers\Api\V1\ProfileController::class, 'update']);
+        Route::delete('/avatar', [\App\Http\Controllers\Api\V1\ProfileController::class, 'deleteAvatar']);
     });
 });
