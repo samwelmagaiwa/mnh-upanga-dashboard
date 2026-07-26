@@ -74,30 +74,17 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('mnh_token')
-  const user = JSON.parse(localStorage.getItem('mnh_user') || 'null')
   const publicRoutes = ['Login', 'PublicDashboard']
-  const adminRoles = ['ED', 'DED', 'DICT']
 
-  // Check if route requires authentication
   const authRequired = !publicRoutes.includes(to.name)
 
   if (authRequired && !token) {
     return next({ name: 'Login' })
   }
 
-  // Protect secure admin views
-  if (['Dashboard', 'Reports'].includes(to.name)) {
-    if (!token || !user || !adminRoles.includes(user.role)) {
-      return next({ name: 'PublicDashboard' })
-    }
-  }
-
   // Redirect authenticated users away from login
   if (to.name === 'Login' && token) {
-    if (user && adminRoles.includes(user.role)) {
-      return next({ name: 'Dashboard' })
-    }
-    return next({ name: 'PublicDashboard' })
+    return next({ name: 'Dashboard' })
   }
 
   next()
