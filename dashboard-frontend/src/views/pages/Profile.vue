@@ -33,15 +33,16 @@ onMounted(() => {
   fetchProfile()
 })
 
+const getToken = () => localStorage.getItem('mnh_token')
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
 const fetchProfile = async () => {
   try {
-    const res = await dashboard.api.get('/profile', {
-      headers: { Authorization: `Bearer ${dashboard.token}` },
+    const res = await axios.get(`${apiBase}/profile`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
     })
     if (res.data.status === 'success') {
       user.value = res.data.data.user
-      // Check if avatar is relative path, prepend backend URL if needed
-      // Assuming backend returns "storage/avatars/..."
     }
   } catch (e) {
     console.error('Fetch profile error', e)
@@ -70,9 +71,9 @@ const updateProfile = async () => {
   formData.append('_method', 'PUT') // Handle PUT
 
   try {
-    const res = await dashboard.api.post('/profile', formData, {
+    const res = await axios.post(`${apiBase}/profile`, formData, {
       headers: {
-        Authorization: `Bearer ${dashboard.token}`,
+        Authorization: `Bearer ${getToken()}`,
       },
     })
 
