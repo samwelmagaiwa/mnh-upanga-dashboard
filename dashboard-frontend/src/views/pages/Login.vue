@@ -22,13 +22,7 @@ const handleLogin = async () => {
   })
 
   if (result.success) {
-    // Redirect based on role
-    const adminRoles = ['ED', 'DED', 'DICT']
-    if (result.user && adminRoles.includes(result.user.role)) {
-      router.push('/dashboard')
-    } else {
-      router.push('/')
-    }
+    router.push('/dashboard')
   } else {
     errorMessage.value = result.message
     isLoading.value = false
