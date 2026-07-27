@@ -388,12 +388,14 @@ watch(
 }
 
 .stat-label {
-  font-size: 0.9rem; /* Increased from 0.8rem */
+  font-size: 0.9rem;
   font-weight: 750;
-  color: #475569; /* Darker than #64748b for better contrast */
+  color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.2;
 }
 
 .stat-comparison {
