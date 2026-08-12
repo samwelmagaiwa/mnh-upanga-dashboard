@@ -1308,10 +1308,10 @@ class DashboardController extends Controller
                       ->orWhereNull('visit_status');
                 })
                 ->where(function($q) {
-                    // Emergency patients with a valid cons_time are already consulted
+                    // Emergency patients with a non-empty cons_time are already consulted
                     $q->where('clinic_name', 'NOT LIKE', '%EMERGENCY%')
                       ->orWhereNull('cons_time')
-                      ->orWhereRaw("TRIM(cons_time) IN ('', '00:00:00')");
+                      ->orWhereRaw("TRIM(cons_time) = ''");
                 });
 
             if ($clinicName && $clinicName !== 'All Clinics') {

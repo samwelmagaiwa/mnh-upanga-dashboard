@@ -360,8 +360,8 @@ class SyncService
         $stats = Visit::where('visit_date', $date)
             ->selectRaw('
                 COUNT(*) as total_visits,
-                SUM(CASE WHEN UPPER(visit_status) = "C" OR (clinic_name LIKE "%EMERGENCY%" AND cons_time IS NOT NULL AND TRIM(cons_time) NOT IN ("", "00:00:00")) THEN 1 ELSE 0 END) as consulted,
-                SUM(CASE WHEN (visit_status IS NULL OR UPPER(visit_status) != "C") AND NOT (clinic_name LIKE "%EMERGENCY%" AND cons_time IS NOT NULL AND TRIM(cons_time) NOT IN ("", "00:00:00")) THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN UPPER(visit_status) = "C" OR (clinic_name LIKE "%EMERGENCY%" AND cons_time IS NOT NULL AND TRIM(cons_time) != "") THEN 1 ELSE 0 END) as consulted,
+                SUM(CASE WHEN (visit_status IS NULL OR UPPER(visit_status) != "C") AND NOT (clinic_name LIKE "%EMERGENCY%" AND cons_time IS NOT NULL AND TRIM(cons_time) != "") THEN 1 ELSE 0 END) as pending,
                 SUM(CASE WHEN visit_type = "N" THEN 1 ELSE 0 END) as new_visits,
                 SUM(CASE WHEN visit_type = "F" THEN 1 ELSE 0 END) as followups,
                 SUM(CASE WHEN is_nhif = "Y" THEN 1 ELSE 0 END) as nhif_visits,
@@ -434,8 +434,8 @@ class SyncService
                 'clinic_name',
                 'hosp_bu',
                 DB::raw('COUNT(*) as total_visits'),
-                DB::raw('SUM(CASE WHEN UPPER(visit_status) = "C" OR (clinic_name LIKE "%EMERGENCY%" AND cons_time IS NOT NULL AND TRIM(cons_time) NOT IN ("", "00:00:00")) THEN 1 ELSE 0 END) as consulted'),
-                DB::raw('SUM(CASE WHEN (visit_status IS NULL OR UPPER(visit_status) != "C") AND NOT (clinic_name LIKE "%EMERGENCY%" AND cons_time IS NOT NULL AND TRIM(cons_time) NOT IN ("", "00:00:00")) THEN 1 ELSE 0 END) as pending')
+                DB::raw('SUM(CASE WHEN UPPER(visit_status) = "C" OR (clinic_name LIKE "%EMERGENCY%" AND cons_time IS NOT NULL AND TRIM(cons_time) != "") THEN 1 ELSE 0 END) as consulted'),
+                DB::raw('SUM(CASE WHEN (visit_status IS NULL OR UPPER(visit_status) != "C") AND NOT (clinic_name LIKE "%EMERGENCY%" AND cons_time IS NOT NULL AND TRIM(cons_time) != "") THEN 1 ELSE 0 END) as pending')
             )
             ->get();
 
