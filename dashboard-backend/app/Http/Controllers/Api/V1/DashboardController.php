@@ -1304,14 +1304,14 @@ class DashboardController extends Controller
             $query = Visit::where('visit_date', '>=', $startDate)
                 ->where('visit_date', '<=', $endDate)
                 ->where(function($q) {
-                    $q->where('visit_status', '!=', 'C')
+                    $q->whereRaw("UPPER(visit_status) != 'C'")
                       ->orWhereNull('visit_status');
                 })
                 ->where(function($q) {
-                    // Emergency patients with a recorded cons_time are already consulted
+                    // Emergency patients with a valid cons_time are already consulted
                     $q->where('clinic_name', 'NOT LIKE', '%EMERGENCY%')
                       ->orWhereNull('cons_time')
-                      ->orWhere('cons_time', '');
+                      ->orWhereRaw("TRIM(cons_time) IN ('', '00:00:00')");
                 });
 
             if ($clinicName && $clinicName !== 'All Clinics') {
