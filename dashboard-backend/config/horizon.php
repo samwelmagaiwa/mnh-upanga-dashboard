@@ -46,9 +46,9 @@ return [
             'balance'    => 'auto',
             'autoScalingStrategy' => 'time',
             'minProcesses' => 1,
-            'maxProcesses' => 5,
+            'maxProcesses' => 2,
             'balanceMaxShift'    => 1,
-            'balanceCooldown'    => 3,
+            'balanceCooldown'    => 5,
             'tries'      => 3,
             'timeout'    => 600,
             'nice'       => 0,
@@ -58,9 +58,9 @@ return [
     'environments' => [
         'production' => [
             'supervisor-1' => [
-                'maxProcesses'   => 5,
+                'maxProcesses'   => 2,
                 'balanceMaxShift' => 1,
-                'balanceCooldown' => 3,
+                'balanceCooldown' => 5,
             ],
         ],
         'local' => [

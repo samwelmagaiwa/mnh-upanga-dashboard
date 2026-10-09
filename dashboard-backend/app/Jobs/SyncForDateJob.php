@@ -21,7 +21,7 @@ class SyncForDateJob implements ShouldQueue
     public $timeout = 600; // 10 minutes per job to be safe
     public $uniqueFor = 600; // Lock expires after 10 minutes if job crashes
     public $tries = 3;
-    public $backoff = [30, 60, 120];
+    public $backoff = [60, 120, 300];
 
     public function __construct($date, $force = false)
     {
